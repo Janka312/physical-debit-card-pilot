@@ -41,7 +41,7 @@ BRONZE_TABLES = {
     "merchant_catalog": "bronze_merchant_catalog",
 }
 
-MISSING_TOKENS = ["", "nan", "null", "none"]
+MISSING_TOKENS = ["", "nan", "null", "none", "n/a"]
 
 
 # %% Lectura desde Glue Data Catalog
@@ -103,6 +103,31 @@ def normalize_category(column: str) -> Column:
         )
     )
 
+def normalize_card_type(column: str) -> Column:
+    """Homologa las representaciones del tipo de tarjeta."""
+
+    value = normalize_category(column)
+
+    return (
+        F.when(
+            value.isin("f", "fisica", "física"),
+            F.lit("fisica"),
+        )
+        .when(
+            value.isin("v", "virtual"),
+            F.lit("virtual"),
+        )
+        .otherwise(value)
+    )
+
+def normalize_transaction_type(column: str) -> Column:
+    """Homologa las representaciones del tipo de transacción."""
+
+    return F.regexp_replace(
+        normalize_category(column),
+        r"\s+",
+        "_",
+    )
 
 def parse_boolean(column: str) -> Column:
     """Homologa representaciones de verdadero y falso."""
@@ -124,6 +149,7 @@ def parse_boolean(column: str) -> Column:
         )
         .otherwise(F.lit(None))
     )
+
 
 
 def parse_mixed_timestamp(column: str) -> Column:
@@ -230,7 +256,7 @@ cards_silver = (
     .dropDuplicates()
     .withColumn(
         "tipo",
-        normalize_category("tipo"),
+        normalize_card_type("tipo"),
     )
     .withColumn(
         "fecha_emision",
@@ -251,7 +277,7 @@ transactions_silver = (
     .dropDuplicates()
     .withColumn(
         "tipo_transaccion",
-        normalize_category("tipo_transaccion"),
+        normalize_transaction_type("tipo_transaccion"),
     )
     .withColumn(
         "es_devolucion",
