@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environment
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Testing / linting cache
+.pytest_cache/
+.ruff_cache/
+
+# Environment variables
+.env
+
+# Local data
+data/raw/
+data/processed/
+
+# Artifacts / models
+artifacts/
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
