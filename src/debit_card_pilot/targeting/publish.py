@@ -1,6 +1,5 @@
-from io import BytesIO
+from io import BytesIO, StringIO
 
-import boto3
 import joblib
 import pandas as pd
 
@@ -14,25 +13,48 @@ from debit_card_pilot.config import (
 def publish_ranking_to_s3(
     ranking: pd.DataFrame,
     s3_client,
-) -> str:
-    """Publica el ranking final en la capa Gold."""
+) -> tuple[str, str]:
+    """Publica el ranking en Parquet y CSV dentro de Gold."""
 
-    buffer = BytesIO()
+    base_key = f"{GOLD_PREFIX}/customer_targeting"
+
+    # Parquet para analítica
+    parquet_buffer = BytesIO()
 
     ranking.to_parquet(
-        buffer,
+        parquet_buffer,
         index=False,
     )
 
-    key = f"{GOLD_PREFIX}/customer_targeting/customer_targeting.parquet"
+    parquet_key = f"{base_key}/customer_targeting.parquet"
 
     s3_client.put_object(
         Bucket=S3_BUCKET,
-        Key=key,
-        Body=buffer.getvalue(),
+        Key=parquet_key,
+        Body=parquet_buffer.getvalue(),
     )
 
-    return f"s3://{S3_BUCKET}/{key}"
+    # CSV para consumo ligero desde API
+    csv_buffer = StringIO()
+
+    ranking.to_csv(
+        csv_buffer,
+        index=False,
+    )
+
+    csv_key = f"{base_key}/customer_targeting.csv"
+
+    s3_client.put_object(
+        Bucket=S3_BUCKET,
+        Key=csv_key,
+        Body=csv_buffer.getvalue(),
+        ContentType="text/csv",
+    )
+
+    return (
+        f"s3://{S3_BUCKET}/{parquet_key}",
+        f"s3://{S3_BUCKET}/{csv_key}",
+    )
 
 
 def publish_model_to_s3(

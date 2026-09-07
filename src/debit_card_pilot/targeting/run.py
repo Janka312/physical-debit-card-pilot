@@ -122,7 +122,7 @@ def main() -> None:
     )
 
     # Publicación
-    ranking_uri = publish_ranking_to_s3(
+    parquet_uri, csv_uri = publish_ranking_to_s3(
         ranking,
         s3,
     )
@@ -134,9 +134,9 @@ def main() -> None:
 
     print(f"Training customers: {len(train_features):,}")
     print(f"Scored candidates: {len(ranking):,}")
-    print(f"Ranking published: {ranking_uri}")
+    print(f"Parquet published: {parquet_uri}")
+    print(f"CSV published: {csv_uri}")
     print(f"Model published: {model_uri}")
-
 
 if __name__ == "__main__":
     main()
