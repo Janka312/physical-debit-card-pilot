@@ -4,7 +4,6 @@ import json
 
 import boto3
 
-
 BUCKET = "bg-ds-debit-card-pilot-bucket"
 KEY = "gold/customer_targeting/customer_targeting.csv"
 

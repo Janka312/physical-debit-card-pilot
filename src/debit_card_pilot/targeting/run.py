@@ -24,7 +24,6 @@ from debit_card_pilot.targeting.publish import (
 from debit_card_pilot.targeting.score import score_candidates
 from debit_card_pilot.targeting.train import train_final_model
 
-
 AWS_PROFILE = "ds-technical-test"
 
 
