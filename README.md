@@ -186,21 +186,25 @@ ejecuta la estandarización de Bronze hacia Silver mediante AWS Glue 5.x y Spark
 
 | Problema detectado | Decisión |
 | --- | --- |
-| Duplicados exactos en Customers, Cards y Transactions | Eliminados; las claves quedan consistentes luego del dedup |
+| Duplicados exactos en Customers, Cards y Transactions | Eliminados; después del dedup las claves relevantes quedan consistentes |
 | Cédulas asociadas a distintos `cliente_id` (~60 casos con atributos diferentes) | Se mantienen separadas; `cliente_id` se utiliza como identificador operacional |
-| Registros cuyo cliente no existe en el maestro | Se conservan con `is_orphan_customer` |
+| Registros cuyo cliente no existe en el maestro | Se conservan con `is_orphan_customer` para mantener trazabilidad |
 | Comercios no presentes en catálogo (`COM-998`, `COM-999`) | Se conservan con `is_uncatalogued_merchant` |
-| Pseudo-nulos (`"nan"`, `"null"`, `"n/a"`, `""`) | Homologados a nulo real |
-| Fechas en formatos mixtos, incluyendo epoch ms/s | Conversión tolerante; valores no recuperables permanecen nulos |
-| Categorías inconsistentes (`F` / `fisica` / `física`, `Cash In` / `cash_in`) | Homologadas a valores canónicos |
-| Montos con símbolos y formatos heterogéneos | Normalizados a formato numérico |
+| Pseudo-nulos (`"nan"`, `"null"`, `"none"`, `"n/a"`, `""`) | Homologados a nulo real |
+| Categorías conceptualmente equivalentes con distinta escritura (`F`, `fisica`, `física`; `Cash In`, `cash_in`, etc.) | Homologadas a valores canónicos mediante normalización de texto y reglas explícitas |
+| Valores categóricos desconocidos o ausentes | Se preservan como missing/desconocido según el contexto; no se convierten automáticamente a una categoría válida |
+| Fechas en formatos mixtos, incluyendo timestamps convencionales y epoch en segundos/milisegundos | Conversión tolerante; valores no recuperables permanecen nulos |
+| Fechas extremas o inconsistentes desde el punto de vista temporal | Se detectan durante el análisis; no se sobrescriben en Silver sin evidencia. En features, fechas de nacimiento imposibles respecto a la fecha de referencia se tratan como missing |
+| `respondio` ausente en interacciones de marketing | Se conserva como desconocido; no se interpreta como `False` |
+| `comercio_codigo` con alta proporción de nulos | No se imputa globalmente, ya que su ausencia es esperable para varios tipos de transacción que no involucran comercios |
+| Montos con símbolos, espacios y formatos heterogéneos | Normalizados a formato numérico mediante conversión tolerante |
 | Montos negativos | Conservados porque su semántica no está suficientemente documentada para tratarlos como errores |
+| Montos extremos | Se identifican durante el análisis y se priorizan métricas robustas como la mediana; no se eliminan automáticamente |
+| Inconsistencias semánticas potenciales en el catálogo de comercios | Se estandariza formato, pero no se corrige contenido sin una fuente externa de referencia |
 
 **Principio general:** aplicar transformaciones únicamente cuando exista evidencia suficiente para justificarlas.
 
-Las anomalías sin una fuente de verdad clara se conservan y documentan mediante flags o decisiones explícitas dentro del análisis.
-
----
+La capa Silver preserva la información original siempre que sea posible y agrega estandarización, tipificación y flags de calidad. Las decisiones que dependen del contexto analítico —por ejemplo, plausibilidad de fechas, tratamiento de outliers o exclusión de registros— se realizan posteriormente para evitar introducir supuestos irreversibles durante el ETL.
 
 ## 5. Enfoque de modelado
 
@@ -883,3 +887,46 @@ Para la siguiente ola se propone un ranking de propensión a activación que:
 - queda disponibilizado para consumo tecnológico mediante una API AWS.
 
 La solución transforma datos con problemas de calidad en una decisión de negocio reproducible y defendible. El modelo mejora el baseline, concentra mejor a los clientes con mayor propensión de activación y entrega un resultado integrado y consumible dentro de AWS.
+
+---
+
+## 18. Anexos — Evidencias de implementación AWS
+
+A continuación se incluyen las principales evidencias de la infraestructura desplegada y validada durante la prueba.
+
+### 18.1 Estructura S3
+
+Organización del bucket principal en capas Bronze, Silver, Gold y artefactos de modelo.
+
+![S3 structure](docs/images/01_s3_structure.png)
+
+### 18.2 AWS Glue — Data Catalog
+
+Catálogo de datasets procesados dentro de la database `debit_card_pilot`.
+
+![Glue catalogs](docs/images/02_glue_catalogs.png)
+
+### 18.3 AWS Glue — ETL ejecutado correctamente
+
+Ejecución del job `debit-card-pilot-bronze-to-silver`.
+
+![Glue ETL run](docs/images/02_glue_etl_job_runs.png)
+
+### 18.4 Gold Output
+
+Resultado final de priorización publicado en S3.
+
+![Gold output](docs/images/01_s3_gold.png)
+
+### 18.5 AWS Lambda — prueba de consumo
+
+Validación de la función `debit-card-targeting-api` leyendo el ranking desde Gold y devolviendo respuesta HTTP exitosa.
+
+![Lambda test](docs/images/04_lambda_test.png)
+
+### 18.6 API Gateway — disponibilización del ranking
+
+Ruta HTTP configurada para consumo tecnológico:
+
+```http
+GET /priorities?limit=N
